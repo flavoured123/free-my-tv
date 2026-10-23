@@ -42,6 +42,14 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="content" android:host="android.media.tv" />
         </intent>
+        <!-- Nuvio: the picks open there by their TMDB id (nuvio://tmdb/movie/<id>) -->
+        <package android:name="com.nuvio.tv" />
+        <package android:name="com.nuvio.app" />
+        <package android:name="ar.tvplayer.tv" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="nuvio" />
+        </intent>
     </queries>
 
     <uses-feature android:name="android.software.leanback" android:required="false" />

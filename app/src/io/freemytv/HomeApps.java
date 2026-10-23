@@ -80,6 +80,9 @@ final class HomeApps {
      * (YouTube); empty = the art's colors as they are. Last, a visual size tweak for the logo. Edit freely.
      */
     private static final String[][] SHELF = {
+        {"nuvio", "Nuvio", "com.nuvio.tv", "7C5CFF", "", "1"},
+        {"nuvio", "Nuvio", "com.nuvio.app", "7C5CFF", "", "1"},          // Nuvio's Play Store build
+        {"tivimate", "TiviMate", "ar.tvplayer.tv", "1E88E5", "", "1"},
         {"netflix", "Netflix", "com.netflix.ninja", "E50914", "", "1"},
         {"youtube", "YouTube", "com.google.android.youtube.tv", "FF0033", "play", "1"},
         {"prime", "Prime Video", "com.amazon.amazonvideo.livingroom", "1A98FF", "tint", "0.96"},

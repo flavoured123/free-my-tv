@@ -37,7 +37,7 @@ import java.util.concurrent.Executors;
  * Home screen picks ("This morning / afternoon / tonight"): what's trending this week plus recent releases, only from
  * the streaming apps installed on the TV (Netflix, Prime Video, Disney+, Max, Apple TV, Okko, Hulu, Paramount+, Peacock,
  * Globoplay...), via TMDB (an open movie database that knows what streams where in each country). Three per hour.
- * "Watch" opens the service's app.
+ * "Watch" opens the service's app; with Nuvio on the TV, every service counts and "Watch" opens the title in Nuvio.
  *
  * Each person uses their own free TMDB key (config.properties "tmdb_key", built into the app). It never goes to the log.
  */
@@ -599,13 +599,48 @@ final class Recs {
     /** The service's app is on the TV, and the service isn't hidden (an app the TV ships without a subscription, say). */
     private boolean installed(String pkg) {
         if (!HIDDEN.isEmpty()) for (String[] s : SERVICES) if (s[2].equals(pkg) && HIDDEN.contains(s[1])) return false;
+        if (nuvio(context) != null) return true;   // Nuvio plays every service's titles: no app needed
         return HomeApps.launchIntent(context.getPackageManager(), pkg) != null;
+    }
+
+    // MARK: - Nuvio (picks open the title in Nuvio, by its TMDB id, when Nuvio is on the TV)
+
+    private static volatile String nuvioPkg;
+    private static volatile long nuvioAt;
+
+    /** The package that opens nuvio:// links (com.nuvio.tv, or the Play Store build com.nuvio.app), or null. */
+    static String nuvio(Context c) {
+        long now = System.currentTimeMillis();
+        if (now - nuvioAt < 60_000L && now >= nuvioAt) return nuvioPkg;   // looked up at most once a minute
+        String found = null;
+        try {
+            android.content.Intent probe = new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("nuvio://tmdb/movie/550")).addCategory(android.content.Intent.CATEGORY_BROWSABLE);
+            List<android.content.pm.ResolveInfo> list = c.getPackageManager().queryIntentActivities(probe, 0);
+            for (android.content.pm.ResolveInfo r : list) {
+                if (r.activityInfo != null && !c.getPackageName().equals(r.activityInfo.packageName)) {
+                    found = r.activityInfo.packageName;
+                    break;
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+        nuvioPkg = found;
+        nuvioAt = now;
+        return found;
+    }
+
+    /** What OK on a pick opens: the title in Nuvio when it's on the TV, otherwise the service's app (or its page). */
+    static HomeApps.Item opener(Context c, Pick p) {
+        String n = nuvio(c);
+        if (n != null) return HomeApps.app(n, "Nuvio", "nuvio://tmdb/" + ("tv".equals(p.kind) ? "tv" : "movie") + "/" + p.id);
+        return HomeApps.app(p.pkg, serviceName(p), p.link);
     }
 
     private long sourceStamp() {
         long stamp = (Config.TMDB_KEY.hashCode() * 31L + REGION.hashCode()) * 31L + (Config.HIDE_ANIMATION ? 1 : 0);
         for (String[] service : SERVICES) stamp = stamp * 31L + (installed(service[2]) ? service[2].hashCode() : 0);
-        return stamp;
+        return stamp * 31L + (nuvio(context) != null ? 1 : 0);
     }
 
     // MARK: - Watchmode (the title's own page in its app; the free plan's web addresses are what the apps open)
@@ -621,6 +656,7 @@ final class Recs {
 
     /** A key is set and Watchmode hasn't refused it (a refused key isn't tried again until it changes). */
     private boolean linksOn() {
+        if (nuvio(context) != null) return false;   // Nuvio opens the title itself
         String key = Config.WATCHMODE_KEY.trim();
         return !key.isEmpty() && cache.getInt("wm:refused", 0) != key.hashCode();
     }
