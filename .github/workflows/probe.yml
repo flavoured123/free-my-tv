@@ -1,0 +1,31 @@
+name: Probe sports APIs
+on:
+  push:
+    branches: [probe]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir out && cd out
+          get() { curl -sS -m 20 -A "Mozilla/5.0" -o "$1.json" -w "$1 %{http_code} %{size_download}\n" "$2" >> ../status.txt || echo "$1 FAIL" >> ../status.txt; }
+          D=$(date -u +%Y%m%d); E=$(date -u -d '+10 day' +%Y%m%d)
+          get espn_bundesliga "https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard?dates=$D-$E"
+          get espn_ucl "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard?dates=$D-$E"
+          get espn_epl "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=$D-$E"
+          get espn_friendly "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.friendly/scoreboard?dates=$D-$E"
+          get espn_cricket_header "https://site.api.espn.com/apis/personalized/v2/scoreboard/header?sport=cricket&region=in&lang=en"
+          get espn_cricket_sb "https://site.api.espn.com/apis/site/v2/sports/cricket/scoreboard"
+          get espn_tennis_atp "https://site.api.espn.com/apis/site/v2/sports/tennis/atp/scoreboard"
+          get espn_mma "https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"
+          get tsdb_wwe_next "https://www.thesportsdb.com/api/v1/json/123/eventsnextleague.php?id=4444"
+          get tsdb_cricket_day "https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=$(date -u +%Y-%m-%d)&s=Cricket"
+          get tsdb_bl_next "https://www.thesportsdb.com/api/v1/json/123/eventsnextleague.php?id=4331"
+          get tsdb_tv "https://www.thesportsdb.com/api/v1/json/123/eventstv.php?d=$(date -u +%Y-%m-%d)&s=Cricket"
+      - run: |
+          git init -q pub && cd pub && mv ../out data && mv ../status.txt .
+          git config user.name probe && git config user.email probe@users.noreply.github.com
+          git checkout -q -b probe-data && git add -A && git commit -qm data
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" probe-data
