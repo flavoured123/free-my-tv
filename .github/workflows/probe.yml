@@ -11,17 +11,10 @@ jobs:
       - run: |
           mkdir out && cd out
           get() { curl -sS -m 20 -A "Mozilla/5.0" -o "$1.json" -w "$1 %{http_code} %{size_download}\n" "$2" >> ../status.txt || echo "$1 FAIL" >> ../status.txt; }
-          D=$(date -u +%Y%m%d); E=$(date -u -d '+3 day' +%Y%m%d); Y=$(date -u +%Y)
-          get bl_plain "https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard"
-          get bl_day "https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard?dates=$E"
-          get bl_range "https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard?dates=${D}-${E}&limit=100"
-          get soccer_header "https://site.api.espn.com/apis/personalized/v2/scoreboard/header?sport=soccer&region=de&lang=en"
-          get all_header "https://site.api.espn.com/apis/personalized/v2/scoreboard/header?region=in&lang=en"
-          get cric_series_web "https://site.web.api.espn.com/apis/site/v2/sports/cricket/24469/scoreboard"
-          get cric_series "https://site.api.espn.com/apis/site/v2/sports/cricket/24469/scoreboard"
-          get cric_sched "https://site.web.api.espn.com/apis/site/v2/sports/cricket/24469/schedule"
-          get tsdb_wwe_season "https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=4444&s=$Y"
-          get tsdb_wwe_past "https://www.thesportsdb.com/api/v1/json/123/eventspastleague.php?id=4444"
+          get atp "https://site.api.espn.com/apis/site/v2/sports/tennis/atp/scoreboard"
+          get wta "https://site.api.espn.com/apis/site/v2/sports/tennis/wta/scoreboard"
+          get ucl_day "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard?dates=$(date -u -d '+4 day' +%Y%m%d)"
+          get nations "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.friendly/scoreboard?dates=$(date -u -d '+18 day' +%Y%m%d)"
       - run: |
           git init -q pub && cd pub && mv ../out data && mv ../status.txt .
           git config user.name probe && git config user.email probe@users.noreply.github.com
