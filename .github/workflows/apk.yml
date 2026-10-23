@@ -35,9 +35,9 @@ jobs:
           TMDB_KEY: ${{ secrets.TMDB_KEY }}
           KEYSTORE: ${{ secrets.KEYSTORE }}
           TMDB_REGION: ${{ vars.TMDB_REGION || 'DE' }}
-          CITY: ${{ vars.CITY || 'Berlin' }}
-          LATITUDE: ${{ vars.LATITUDE || '52.52' }}
-          LONGITUDE: ${{ vars.LONGITUDE || '13.405' }}
+          CITY: ${{ vars.CITY || 'Wetter' }}
+          LATITUDE: ${{ vars.LATITUDE || '51.388' }}
+          LONGITUDE: ${{ vars.LONGITUDE || '7.395' }}
           LANGUAGE: ${{ vars.LANGUAGE || 'auto' }}
         run: |
           cp config.example.properties config.properties
