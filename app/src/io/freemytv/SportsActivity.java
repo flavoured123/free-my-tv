@@ -89,14 +89,25 @@ public class SportsActivity extends Activity {
             load();
         }
 
+        /** Every minute while open: live scores when a game is on, otherwise the schedule when it's stale. */
+        private final Runnable tick = new Runnable() {
+            @Override public void run() {
+                if (sports.anyLive()) sports.refreshLive(); else sports.refreshIfStale();
+                postDelayed(this, 60_000);
+            }
+        };
+
         void resume() {
             sports.addListener(this);
             sports.refreshIfStale();
             load();
+            removeCallbacks(tick);
+            postDelayed(tick, 60_000);
         }
 
         void pause() {
             sports.removeListener(this);
+            removeCallbacks(tick);
         }
 
         @Override public void onSports() {
@@ -253,7 +264,9 @@ public class SportsActivity extends Activity {
 
         private void open() {
             Context c = getContext();
-            Intent intent = Sports.openIntent(c);
+            List<Sports.Event> list = col < games.size() ? games.get(col) : null;
+            Sports.Event ev = list == null || row >= list.size() ? null : list.get(row);
+            Intent intent = Sports.openIntent(c, ev);
             if (intent == null) {
                 Toast.makeText(c, Ui.tr("No IPTV app found on this TV."), Toast.LENGTH_LONG).show();
                 return;
@@ -391,7 +404,10 @@ public class SportsActivity extends Activity {
                     fill.setColor(live ? LIVE : done ? DIM : ev.priority >= 9 ? ACCENT : color);
                     c.drawCircle(cx + 6 * k, ty - 7 * k, 5 * k, fill);
                     timeLabel.setColor(live ? LIVE : SUB);
-                    String when = live ? Ui.tr("LIVE") : done ? Ui.tr("Finished") : when(ev.start);
+                    boolean longClock = Sports.CRICKET.equals(ev.sport);   // cricket's clock is a sentence: it goes below
+                    String when = live ? (ev.clock.isEmpty() || longClock ? Ui.tr("LIVE") : Ui.tr("LIVE") + "  ·  " + ev.clock)
+                            : done ? Ui.tr("Finished") : when(ev.start);
+                    String under = longClock && !ev.clock.isEmpty() && (live || done) ? ev.clock : ev.detail;
                     c.drawText(when, cx + 20 * k, ty, timeLabel);
                     // Title on up to two lines, then the league
                     item.setColor(done ? SUB : TEXT);
@@ -400,7 +416,7 @@ public class SportsActivity extends Activity {
                     int cut = item.breakText(t, true, tw, null);
                     if (cut >= t.length()) {
                         c.drawText(t, cx, ry + 62 * k, item);
-                        c.drawText(TextUtils.ellipsize(ev.detail, small, tw, TextUtils.TruncateAt.END).toString(), cx, ry + 94 * k, small);
+                        c.drawText(TextUtils.ellipsize(under, small, tw, TextUtils.TruncateAt.END).toString(), cx, ry + 94 * k, small);
                     } else {
                         int space = t.lastIndexOf(' ', cut);
                         if (space <= 0) space = cut;

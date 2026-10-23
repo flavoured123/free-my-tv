@@ -41,7 +41,10 @@ final class Sports {
     static final String[] ALL = {CRICKET, FOOTBALL, WRESTLING, TENNIS};
 
     static final class Event {
+        String id = "";
         String sport, league, title, detail, state;   // state: "pre", "in" (live) or "post"
+        String home = "", away = "", homeAbbr = "", awayAbbr = "";   // teams or players, for finding the channel
+        String clock = "";   // while live: "67'", "HT", or cricket's "India need 45 runs from 30 balls"
         long start;
         int priority;      // higher first among the same day: India, Bundesliga, national teams…
     }
@@ -175,6 +178,41 @@ final class Sports {
         });
     }
 
+    /**
+     * While the hub shows a live game: only the two small scoreboards (cricket and today's football), every minute,
+     * and the games already listed take their new score, clock and state.
+     */
+    void refreshLive() {
+        if (fetching) return;
+        fetching = true;
+        io.execute(() -> {
+            try {
+                List<Event> fresh = new ArrayList<>();
+                try { cricket(fresh); } catch (Exception e) { AppLog.w("sports live cricket: " + e.getMessage()); }
+                footballToday(fresh, new HashSet<>());
+                java.util.Map<String, Event> byId = new java.util.HashMap<>();
+                for (Event e : fresh) if (!e.id.isEmpty()) byId.put(e.id, e);
+                List<Event> next = new ArrayList<>();
+                for (Event old : events) {
+                    Event now = byId.get(old.id);
+                    if (now == null || !now.sport.equals(old.sport)) {
+                        next.add(old);
+                        continue;
+                    }
+                    now.priority = old.priority;
+                    next.add(now);
+                    byId.remove(old.id);
+                }
+                next.addAll(byId.values());   // a game that just started in a series not listed before
+                events = next;
+                save();
+            } finally {
+                fetching = false;
+                notifyListeners();
+            }
+        });
+    }
+
     private void notifyListeners() {
         main.post(() -> { for (Listener l : new ArrayList<>(listeners)) l.onSports(); });
     }
@@ -195,6 +233,7 @@ final class Sports {
                     JSONObject e = evs.getJSONObject(i);
                     if (!seen.add(e.optString("id"))) continue;
                     Event ev = new Event();
+                    ev.id = "espn:" + e.optString("id");
                     ev.sport = CRICKET;
                     ev.league = series;
                     ev.start = time(e.optString("date"));
@@ -204,8 +243,12 @@ final class Sports {
                     for (int c = 0; cs != null && c < cs.length(); c++) {
                         JSONObject t = cs.getJSONObject(c);
                         String score = t.optString("score", "");
-                        teams.add(t.optString("displayName") + ("in".equals(ev.state) && !score.isEmpty() ? " " + score : ""));
+                        boolean shows = ("in".equals(ev.state) || "post".equals(ev.state)) && !score.isEmpty();
+                        teams.add(t.optString("displayName") + (shows ? " " + score : ""));
+                        if (c == 0) { ev.home = t.optString("displayName"); ev.homeAbbr = t.optString("abbreviation"); }
+                        if (c == 1) { ev.away = t.optString("displayName"); ev.awayAbbr = t.optString("abbreviation"); }
                     }
+                    if ("in".equals(ev.state) || "post".equals(ev.state)) ev.clock = e.optString("summary", "");
                     ev.title = teams.size() == 2 ? teams.get(0) + " v " + teams.get(1) : e.optString("name");
                     ev.detail = series;
                     String text = (series + " " + ev.title).toLowerCase(Locale.ROOT);
@@ -224,7 +267,12 @@ final class Sports {
 
     private void football(List<Event> out) throws Exception {
         Set<String> seen = new HashSet<>();
-        // Today, every league ESPN has: kept only for the leagues above (and national teams).
+        footballToday(out, seen);
+        footballWeek(out, seen);
+    }
+
+    /** Today, every league ESPN has: kept only for the leagues above (and national teams). Also the live scores. */
+    private void footballToday(List<Event> out, Set<String> seen) {
         try {
             JSONObject o = get(ESPN + "/personalized/v2/scoreboard/header?sport=soccer&region=de&lang=en");
             JSONArray sports = o.optJSONArray("sports");
@@ -239,21 +287,28 @@ final class Sports {
                         JSONObject e = evs.getJSONObject(i);
                         if (!seen.add(e.optString("id"))) continue;
                         JSONArray cs = e.optJSONArray("competitors");
-                        String[] home = new String[2], away = new String[2];
+                        String[] home = new String[3], away = new String[3];
                         for (int c = 0; cs != null && c < cs.length(); c++) {
                             JSONObject t = cs.getJSONObject(c);
                             String[] side = "away".equals(t.optString("homeAway")) ? away : home;
                             side[0] = t.optString("displayName");
                             side[1] = t.optString("score", "");
+                            side[2] = t.optString("abbreviation", "");
                         }
-                        out.add(footballEvent(known, e.optString("date"), e.optString("status", "pre"), home, away));
+                        String state = e.optString("status", "pre");
+                        String clock = e.optString("summary", "");
+                        if (clock.isEmpty() || "Scheduled".equals(clock)) clock = e.optString("clock", "");
+                        out.add(footballEvent(e.optString("id"), known, e.optString("date"), state, clock, home, away));
                     }
                 }
             }
         } catch (Exception e) {
             AppLog.w("sports football today: " + e.getMessage());
         }
-        // The week ahead, day by day, for the main leagues.
+    }
+
+    /** The week ahead, day by day, for the main leagues. */
+    private void footballWeek(List<Event> out, Set<String> seen) throws Exception {
         Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
         SimpleDateFormat f = new SimpleDateFormat("yyyyMMdd", Locale.US);
         f.setTimeZone(TimeZone.getTimeZone("UTC"));
@@ -272,17 +327,20 @@ final class Sports {
                         if (!seen.add(e.optString("id"))) continue;
                         JSONObject comp = e.optJSONArray("competitions") == null ? null : e.getJSONArray("competitions").optJSONObject(0);
                         JSONArray cs = comp == null ? null : comp.optJSONArray("competitors");
-                        String[] home = new String[2], away = new String[2];
+                        String[] home = new String[3], away = new String[3];
                         for (int c = 0; cs != null && c < cs.length(); c++) {
                             JSONObject t = cs.getJSONObject(c);
                             String[] side = "away".equals(t.optString("homeAway")) ? away : home;
                             JSONObject team = t.optJSONObject("team");
                             side[0] = team == null ? "" : team.optString("displayName");
                             side[1] = t.optString("score", "");
+                            side[2] = team == null ? "" : team.optString("abbreviation", "");
                         }
                         JSONObject st = e.optJSONObject("status");
                         JSONObject type = st == null ? null : st.optJSONObject("type");
-                        out.add(footballEvent(known, e.optString("date"), type == null ? "pre" : type.optString("state", "pre"), home, away));
+                        String state = type == null ? "pre" : type.optString("state", "pre");
+                        String clock = type == null ? "" : type.optString("shortDetail", "");
+                        out.add(footballEvent(e.optString("id"), known, e.optString("date"), state, clock, home, away));
                     }
                 } catch (Exception e) {
                     failures++;
@@ -292,8 +350,14 @@ final class Sports {
         if (failures == tries && seen.isEmpty()) throw new IOException("no football data");
     }
 
-    private static Event footballEvent(String[] league, String date, String state, String[] home, String[] away) {
+    private static Event footballEvent(String id, String[] league, String date, String state, String clock, String[] home, String[] away) {
         Event ev = new Event();
+        ev.id = "espn:" + id;
+        ev.home = home[0] == null ? "" : home[0];
+        ev.away = away[0] == null ? "" : away[0];
+        ev.homeAbbr = home[2] == null ? "" : home[2];
+        ev.awayAbbr = away[2] == null ? "" : away[2];
+        ev.clock = "in".equals(state) ? clock : "";
         ev.sport = FOOTBALL;
         ev.league = league[1];
         ev.start = time(date);
@@ -332,6 +396,7 @@ final class Sports {
             c.add(Calendar.DAY_OF_YEAR, add);
             if (c.getTimeInMillis() + 3 * 3600_000L < now) c.add(Calendar.DAY_OF_YEAR, 7);
             Event ev = new Event();
+            ev.id = "wwe:" + show[0];
             ev.sport = WRESTLING;
             ev.league = "WWE";
             ev.title = "WWE " + show[0];
@@ -351,6 +416,7 @@ final class Sports {
                 if (n.startsWith("raw") || n.startsWith("smackdown") || n.startsWith("nxt") || n.startsWith("main event")
                         || n.startsWith("evolve")) continue;   // the weekly shows are above
                 Event ev = new Event();
+                ev.id = "tsdb:" + e.optString("idEvent");
                 ev.sport = WRESTLING;
                 ev.league = "WWE";
                 ev.title = name;
@@ -399,6 +465,9 @@ final class Sports {
                             }
                             if (names.size() != 2) continue;
                             Event ev = new Event();
+                            ev.id = "espn:" + c.optString("id");
+                            ev.home = names.get(0);
+                            ev.away = names.get(1);
                             ev.sport = TENNIS;
                             ev.league = tour.toUpperCase(Locale.ROOT);
                             ev.title = names.get(0) + " v " + names.get(1);
@@ -448,9 +517,28 @@ final class Sports {
         }
     }
 
-    static Intent openIntent(Context c) {
+    /**
+     * What OK on a game opens. Debrify gets the game itself (debrify://sports/match): it finds the channels showing
+     * it in its playlists, best stream first. Other apps open on their home.
+     */
+    static Intent openIntent(Context c, Event ev) {
         String pkg = app(c);
-        return pkg == null ? null : HomeApps.launchIntent(c.getPackageManager(), pkg);
+        if (pkg == null) return null;
+        if (pkg.startsWith("com.debrify.app") && ev != null) {
+            android.net.Uri.Builder b = new android.net.Uri.Builder().scheme("debrify").authority("sports").path("match")
+                    .appendQueryParameter("sport", WRESTLING.equals(ev.sport) ? "wwe" : ev.sport)
+                    .appendQueryParameter("league", ev.league == null ? "" : ev.league)
+                    .appendQueryParameter("start", String.valueOf(ev.start));
+            if (!ev.home.isEmpty() && !ev.away.isEmpty()) {
+                b.appendQueryParameter("home", ev.home).appendQueryParameter("away", ev.away);
+                if (!ev.homeAbbr.isEmpty()) b.appendQueryParameter("homeAbbr", ev.homeAbbr);
+                if (!ev.awayAbbr.isEmpty()) b.appendQueryParameter("awayAbbr", ev.awayAbbr);
+            } else {
+                b.appendQueryParameter("title", ev.title == null ? "" : ev.title);
+            }
+            return new Intent(Intent.ACTION_VIEW, b.build()).setPackage(pkg).addCategory(Intent.CATEGORY_BROWSABLE);
+        }
+        return HomeApps.launchIntent(c.getPackageManager(), pkg);
     }
 
     // MARK: - Which sports show, in which order (the hub's own settings)
@@ -541,8 +629,9 @@ final class Sports {
         try (FileOutputStream out = new FileOutputStream(file())) {
             JSONArray a = new JSONArray();
             for (Event e : events) {
-                a.put(new JSONObject().put("sport", e.sport).put("league", e.league).put("title", e.title).put("detail", e.detail)
-                        .put("state", e.state).put("start", e.start).put("priority", e.priority));
+                a.put(new JSONObject().put("id", e.id).put("sport", e.sport).put("league", e.league).put("title", e.title).put("detail", e.detail)
+                        .put("state", e.state).put("start", e.start).put("priority", e.priority).put("home", e.home).put("away", e.away)
+                        .put("homeAbbr", e.homeAbbr).put("awayAbbr", e.awayAbbr).put("clock", e.clock));
             }
             out.write(new JSONObject().put("at", fetchedAt).put("events", a).toString().getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
@@ -563,6 +652,12 @@ final class Sports {
             e.state = o.optString("state", "pre");
             e.start = o.optLong("start");
             e.priority = o.optInt("priority");
+            e.id = o.optString("id");
+            e.home = o.optString("home");
+            e.away = o.optString("away");
+            e.homeAbbr = o.optString("homeAbbr");
+            e.awayAbbr = o.optString("awayAbbr");
+            e.clock = o.optString("clock");
             out.add(e);
         }
         return out;
