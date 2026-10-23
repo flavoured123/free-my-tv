@@ -3,7 +3,7 @@
 #
 # Secrets (repo Settings → Secrets and variables → Actions → New repository secret):
 #   TMDB_KEY  your free TMDB key (the trending picks)
-#   KEYSTORE  freemytv.keystore in base64; updates must be signed with the same key, so set it once and keep it
+#   KEYSTORE  optional: freemytv.keystore in base64; without it, signing/freemytv.keystore (same key every build)
 # Variables (same page, Variables tab), all optional: TMDB_REGION (DE), CITY, LATITUDE, LONGITUDE, LANGUAGE.
 name: Build APK
 
@@ -53,7 +53,7 @@ jobs:
           set_prop show_crypto false
           [ -n "$TMDB_KEY" ] || echo "::warning::No TMDB_KEY secret: the app builds, but without the trending picks."
           if [ -n "$KEYSTORE" ]; then echo "$KEYSTORE" | base64 -d > freemytv.keystore
-          else echo "::warning::No KEYSTORE secret: this build has a new key, so it won't install over an earlier one."; fi
+          else cp signing/freemytv.keystore freemytv.keystore; fi
       - run: ./build.sh
       - uses: actions/upload-artifact@v4
         with:
