@@ -752,7 +752,10 @@ public class SettingsActivity extends Activity {
                 }
                 case 3: Prefs.setSounds(!Prefs.sounds()); break;
                 case 4: Prefs.setWeather(!Prefs.weather()); break;
-                case CITY_ROW: return;
+                case CITY_ROW:
+                    if (dir == 0) return;   // OK opens the city search
+                    Prefs.stepCity(dir);
+                    break;
                 case 6: Prefs.setQuotes(!Prefs.quotes()); break;
                 default:
                     if (!Prefs.quotes()) return;

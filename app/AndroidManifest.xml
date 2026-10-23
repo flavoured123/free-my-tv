@@ -105,6 +105,24 @@
             </intent-filter>
         </activity>
 
+        <!-- The Sports hub: from the home screen's Sports button, or as its own app where Free My TV isn't the home
+             (a Fire TV, say). -->
+        <activity
+            android:name=".SportsActivity"
+            android:process=":home"
+            android:exported="true"
+            android:label="Sports"
+            android:taskAffinity="io.freemytv.sports"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection"
+            android:theme="@style/FreeMyTV.Home">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".Screensaver"
             android:process=":home"

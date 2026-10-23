@@ -104,6 +104,52 @@ final class Prefs {
 
     static void setCity(String name, String latitude, String longitude) {
         sp().edit().putString("city", name).putString("latitude", latitude).putString("longitude", longitude).apply();
+        remember(name, latitude, longitude);
+        version++;
+    }
+
+    /**
+     * Cities picked before (newest first, up to 8), plus the one from config.properties: ←/→ on the City row switches
+     * between them, so another city's weather is two presses away. Each is {name, latitude, longitude}.
+     */
+    static List<String[]> cities() {
+        List<String[]> out = new ArrayList<>();
+        try {
+            org.json.JSONArray a = new org.json.JSONArray(sp().getString("cities", "[]"));
+            for (int i = 0; i < a.length(); i++) {
+                org.json.JSONArray c = a.getJSONArray(i);
+                out.add(new String[] {c.getString(0), c.getString(1), c.getString(2)});
+            }
+        } catch (org.json.JSONException ignored) {
+        }
+        boolean home = false;
+        for (String[] c : out) home |= c[1].equals(Config.LATITUDE) && c[2].equals(Config.LONGITUDE);
+        if (!home) out.add(new String[] {Config.CITY.trim().isEmpty() ? Ui.tr("Weather") : Config.CITY.trim(), Config.LATITUDE, Config.LONGITUDE});
+        return out;
+    }
+
+    private static void remember(String name, String latitude, String longitude) {
+        List<String[]> list = cities();
+        org.json.JSONArray a = new org.json.JSONArray();
+        a.put(new org.json.JSONArray().put(name).put(latitude).put(longitude));
+        for (String[] c : list) {
+            if (a.length() >= 8) break;
+            if (c[1].equals(latitude) && c[2].equals(longitude)) continue;
+            a.put(new org.json.JSONArray().put(c[0]).put(c[1]).put(c[2]));
+        }
+        sp().edit().putString("cities", a.toString()).apply();
+    }
+
+    /** ←/→ on the City row: the next (or previous) saved city, without reordering the list. */
+    static void stepCity(int dir) {
+        List<String[]> list = cities();
+        if (list.size() < 2) return;
+        int at = 0;
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i)[1].equals(latitude()) && list.get(i)[2].equals(longitude())) at = i;
+        }
+        String[] c = list.get((at + dir + list.size()) % list.size());
+        sp().edit().putString("city", c[0]).putString("latitude", c[1]).putString("longitude", c[2]).apply();
         version++;
     }
 

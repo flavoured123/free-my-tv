@@ -1060,10 +1060,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     // MARK: - Corner capsule: time and weather (when the hero shows a recommendation) and icon-only buttons
 
-    /** Live TV, the inputs with a device on, All Apps and Settings. */
+    /** Live TV, the inputs with a device on, All Apps, Sports and Settings. */
     private static List<HomeApps.Item> statusList(Context c) {
         List<HomeApps.Item> list = new ArrayList<>();
         list.addAll(HomeApps.shortcuts(c));
+        list.add(HomeApps.sports());
         list.add(HomeApps.settings());
         return list;
     }
