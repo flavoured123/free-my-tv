@@ -186,6 +186,8 @@ public class DiscoverActivity extends Activity implements Sports.Listener, HomeD
         top.addView(weather, new LinearLayout.LayoutParams(0, -2, 1));
         top.addView(button("🎲  " + Ui.tr("Surprise me"), v -> surprise()));
         top.addView(button(Ui.tr("Sports"), v -> startActivity(new Intent(this, SportsActivity.class))));
+        top.addView(button("⚙  " + Ui.tr("Settings"), v -> startActivity(new Intent(this, SettingsActivity.class)
+                .putExtra("settings", true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))));
         column.addView(top);
 
         // Hero text for the focused title.

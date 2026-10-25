@@ -47,8 +47,19 @@ public class SettingsActivity extends Activity {
     private SettingsView view;
     private DreamView preview;   // "Screensaver": the screensaver right here, without changing the system setting
 
+    /** Fire TV: Amazon keeps its own home screen and shows one tile per app, so the tile opens TV Home. */
+    static boolean fireTv(android.content.Context c) {
+        return c.getPackageManager().hasSystemFeature("amazon.hardware.fire_tv");
+    }
+
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (fireTv(this) && !getIntent().getBooleanExtra("settings", false)) {
+            startActivity(new android.content.Intent(this, DiscoverActivity.class)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+            finish();
+            return;
+        }
         Watchdog.install(this);
         Ui.init(this);
         view = new SettingsView(this);
@@ -1033,6 +1044,12 @@ public class SettingsActivity extends Activity {
                 return;
             } else if (focus == 0) {
                 if (busy()) return;
+                if (fireTv(getContext())) {
+                    // Fire OS keeps its own home screen: switching it would only disable Amazon apps.
+                    android.widget.Toast.makeText(getContext(), Ui.tr("On Fire TV, use TV Home instead."),
+                            android.widget.Toast.LENGTH_LONG).show();
+                    return;
+                }
                 screen = HOME_CHOICE;
                 focus = freeActive() ? 0 : 1;
             } else if (focus == 1) {
