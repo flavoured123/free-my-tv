@@ -105,6 +105,24 @@
             </intent-filter>
         </activity>
 
+        <!-- TV Home: the home screen as an app, for TVs where Free My TV can't be the home (Fire TV): trending rows,
+             live sports, Surprise me and the apps. Titles open in Nuvio. -->
+        <activity
+            android:name=".DiscoverActivity"
+            android:process=":home"
+            android:exported="true"
+            android:label="TV Home"
+            android:taskAffinity="io.freemytv.discover"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection"
+            android:theme="@style/FreeMyTV.Home">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <!-- The Sports hub: from the home screen's Sports button, or as its own app where Free My TV isn't the home
              (a Fire TV, say). -->
         <activity
